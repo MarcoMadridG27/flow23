@@ -135,8 +135,18 @@ export const TasksPage: React.FC = () => {
       setError('Debes seleccionar un proyecto');
       return;
     }
+    // Validate that selected project exists
+    if (!projects.find((p) => p.id === formData.projectId)) {
+      setError('Proyecto seleccionado inválido');
+      return;
+    }
     if (!formData.dueDate) {
       setError('La fecha de vencimiento es requerida');
+      return;
+    }
+    // If assignedTo is provided, validate it exists
+    if (formData.assignedTo && !members.find((m) => m.id === formData.assignedTo)) {
+      setError('Usuario asignado inválido');
       return;
     }
     
@@ -144,31 +154,50 @@ export const TasksPage: React.FC = () => {
       setSubmitting(true);
       if (editingTask) {
         // Convertir la fecha a formato ISO completo si se está editando
-        const updateData = {
+        const updateData: any = {
           ...formData,
-          dueDate: formData.dueDate ? new Date(formData.dueDate).toISOString() : formData.dueDate,
+          // send dueDate as YYYY-MM-DD (backend expects date string without time)
+          dueDate: formData.dueDate,
         };
+        if (!updateData.assignedTo) delete updateData.assignedTo;
         await taskService.updateTask(editingTask.id, updateData);
         alert('Tarea actualizada exitosamente');
       } else {
-        // Convertir la fecha a formato ISO completo
-        const dueDateISO = new Date(formData.dueDate).toISOString();
-        
-        await taskService.createTask({
+        // Send dueDate as YYYY-MM-DD (backend commonly expects date-only)
+        const dueDatePayload = formData.dueDate; // already in YYYY-MM-DD
+        const payload: any = {
           title: formData.title,
           description: formData.description,
           projectId: formData.projectId,
           priority: formData.priority,
-          dueDate: dueDateISO,
-          assignedTo: formData.assignedTo || undefined,
-        });
+          dueDate: dueDatePayload,
+        };
+        if (formData.assignedTo) payload.assignedTo = formData.assignedTo;
+
+        await taskService.createTask(payload);
         alert('Tarea creada exitosamente');
       }
       setIsModalOpen(false);
       await loadTasks();
     } catch (error: any) {
       console.error('Error saving task:', error);
-      const errorMsg = error.response?.data?.message || error.message || 'Error al guardar la tarea';
+      const respData = error.response?.data;
+      let errorMsg = 'Error al guardar la tarea';
+
+      if (error.response?.status === 422 && respData) {
+        console.error('Validation error (422) response body:', respData);
+        if (typeof respData === 'string') {
+          errorMsg = respData;
+        } else if (respData.message) {
+          errorMsg = respData.message;
+        } else {
+          // Fallback: show full object so we can inspect validation errors
+          errorMsg = JSON.stringify(respData);
+        }
+      } else {
+        errorMsg = respData?.message || error.message || errorMsg;
+      }
+
       setError(errorMsg);
     } finally {
       setSubmitting(false);
