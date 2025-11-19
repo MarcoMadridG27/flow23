@@ -22,6 +22,7 @@ export const TasksPage: React.FC = () => {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [error, setError] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
+  const [lastPayload, setLastPayload] = useState<any>(null);
   
   // Filters
   const [filters, setFilters] = useState({
@@ -90,8 +91,20 @@ export const TasksPage: React.FC = () => {
     }
   };
 
-  const handleOpenModal = (task?: Task) => {
+  const handleOpenModal = async (task?: Task) => {
     console.log('🔵 Opening task modal...', { task, projects: projects.length });
+
+    // Ensure we have projects loaded before opening modal for creation
+    if (!task && projects.length === 0) {
+      try {
+        const projectsData = await projectService.getProjects(1, 100);
+        setProjects(projectsData.projects);
+        console.log('🔄 Projects refreshed before opening modal:', projectsData.projects.length);
+      } catch (err) {
+        console.error('Error loading projects before opening modal:', err);
+      }
+    }
+
     if (task) {
       setEditingTask(task);
       setFormData({
@@ -114,6 +127,7 @@ export const TasksPage: React.FC = () => {
         assignedTo: '',
       });
     }
+
     console.log('🔵 Setting isModalOpen to true');
     setIsModalOpen(true);
   };
@@ -160,6 +174,8 @@ export const TasksPage: React.FC = () => {
           dueDate: formData.dueDate,
         };
         if (!updateData.assignedTo) delete updateData.assignedTo;
+        setLastPayload({ url: `/tasks/${editingTask.id}`, method: 'PUT', body: updateData });
+        console.log('Task update payload:', updateData);
         await taskService.updateTask(editingTask.id, updateData);
         alert('Tarea actualizada exitosamente');
       } else {
@@ -173,7 +189,8 @@ export const TasksPage: React.FC = () => {
           dueDate: dueDatePayload,
         };
         if (formData.assignedTo) payload.assignedTo = formData.assignedTo;
-
+        setLastPayload({ url: '/tasks', method: 'POST', body: payload });
+        console.log('Task create payload:', payload);
         await taskService.createTask(payload);
         alert('Tarea creada exitosamente');
       }
@@ -186,19 +203,36 @@ export const TasksPage: React.FC = () => {
 
       if (error.response?.status === 422 && respData) {
         console.error('Validation error (422) response body:', respData);
-        if (typeof respData === 'string') {
+        // Common FastAPI error shape: { detail: [ { loc: [...], msg: '...', type: '...'} ] }
+        if (Array.isArray(respData.detail)) {
+          const details = respData.detail.map((d: any) => {
+            if (typeof d === 'string') return d;
+            if (d.msg) {
+              const loc = Array.isArray(d.loc) ? d.loc.join('.') : d.loc;
+              return loc ? `${loc}: ${d.msg}` : d.msg;
+            }
+            return JSON.stringify(d);
+          });
+          const detailsMsg = details.join(' | ');
+          console.error('Parsed validation details:', detailsMsg);
+          errorMsg = detailsMsg;
+        } else if (typeof respData === 'string') {
           errorMsg = respData;
         } else if (respData.message) {
           errorMsg = respData.message;
         } else {
-          // Fallback: show full object so we can inspect validation errors
           errorMsg = JSON.stringify(respData);
         }
       } else {
         errorMsg = respData?.message || error.message || errorMsg;
       }
 
-      setError(errorMsg);
+      // Attach lastPayload to message to aid debugging
+      if (lastPayload) {
+        setError(`${errorMsg} -- Payload: ${JSON.stringify(lastPayload)}`);
+      } else {
+        setError(errorMsg);
+      }
     } finally {
       setSubmitting(false);
     }
