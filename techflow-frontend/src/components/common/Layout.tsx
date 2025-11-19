@@ -63,7 +63,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             </nav>
 
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-700">{user?.name}</span>
+              <Link to="/profile" className="text-sm text-gray-700 hover:underline">{user?.name}</Link>
               <Button variant="ghost" size="sm" onClick={handleLogout}>
                 <ExitIcon className="mr-2 h-4 w-4" />
                 Salir

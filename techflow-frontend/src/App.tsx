@@ -9,6 +9,7 @@ import { ProjectsPage } from './pages/ProjectsPage';
 import { TasksPage } from './pages/TasksPage';
 import { TeamPage } from './pages/TeamPage';
 import { ApiTestPage } from './pages/ApiTestPage';
+import { ProfilePage } from './pages/ProfilePage';
 
 function App() {
   return (
@@ -59,6 +60,15 @@ function App() {
             element={
               <ProtectedRoute>
                 <ApiTestPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <ProfilePage />
               </ProtectedRoute>
             }
           />
